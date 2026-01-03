@@ -33,6 +33,7 @@ import { useKV } from "../../context/kv"
 
 export type PromptProps = {
   sessionID?: string
+  visible?: boolean
   disabled?: boolean
   onSubmit?: () => void
   ref?: (ref: PromptRef) => void
@@ -167,6 +168,13 @@ export function Prompt(props: PromptProps) {
     if (!props.disabled) input.cursorColor = theme.text
   })
 
+  const lastUserMessage = createMemo(() => {
+    if (!props.sessionID) return undefined
+    const messages = sync.data.message[props.sessionID]
+    if (!messages) return undefined
+    return messages.findLast((m) => m.role === "user")
+  })
+
   const [store, setStore] = createStore<{
     prompt: PromptInfo
     mode: "normal" | "shell"
@@ -182,6 +190,27 @@ export function Prompt(props: PromptProps) {
     mode: "normal",
     extmarkToPartIndex: new Map(),
     interrupt: 0,
+  })
+
+  // Initialize agent/model/variant from last user message when session changes
+  let syncedSessionID: string | undefined
+  createEffect(() => {
+    const sessionID = props.sessionID
+    const msg = lastUserMessage()
+
+    if (sessionID !== syncedSessionID) {
+      if (!sessionID || !msg) return
+
+      syncedSessionID = sessionID
+
+      // Only set agent if it's a primary agent (not a subagent)
+      const isPrimaryAgent = local.agent.list().some((x) => x.name === msg.agent)
+      if (msg.agent && isPrimaryAgent) {
+        local.agent.set(msg.agent)
+      }
+      if (msg.model) local.model.set(msg.model)
+      if (msg.variant) local.model.variant.set(msg.variant)
+    }
   })
 
   command.register(() => {
@@ -345,7 +374,8 @@ export function Prompt(props: PromptProps) {
   })
 
   createEffect(() => {
-    input.focus()
+    if (props.visible !== false) input?.focus()
+    if (props.visible === false) input?.blur()
   })
 
   onMount(() => {
@@ -562,6 +592,7 @@ export function Prompt(props: PromptProps) {
 
     // Capture mode before it gets reset
     const currentMode = store.mode
+    const variant = local.model.variant.current()
 
     if (store.mode === "shell") {
       sdk.client.session.shell({
@@ -590,6 +621,7 @@ export function Prompt(props: PromptProps) {
         agent: local.agent.current().name,
         model: `${selectedModel.providerID}/${selectedModel.modelID}`,
         messageID,
+        variant,
       })
     } else {
       sdk.client.session.prompt({
@@ -598,6 +630,7 @@ export function Prompt(props: PromptProps) {
         messageID,
         agent: local.agent.current().name,
         model: selectedModel,
+        variant,
         parts: [
           {
             id: Identifier.ascending("part"),
@@ -718,6 +751,13 @@ export function Prompt(props: PromptProps) {
     return local.agent.color(local.agent.current().name)
   })
 
+  const showVariant = createMemo(() => {
+    const variants = local.model.variant.list()
+    if (variants.length === 0) return false
+    const current = local.model.variant.current()
+    return !!current
+  })
+
   const spinnerDef = createMemo(() => {
     const color = local.agent.color(local.agent.current().name)
     return {
@@ -760,7 +800,7 @@ export function Prompt(props: PromptProps) {
         agentStyleId={agentStyleId}
         promptPartTypeId={() => promptPartTypeId}
       />
-      <box ref={(r) => (anchor = r)}>
+      <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
         <box
           border={["left"]}
           borderColor={highlight()}
@@ -958,6 +998,12 @@ export function Prompt(props: PromptProps) {
                     {local.model.parsed().model}
                   </text>
                   <text fg={theme.textMuted}>{local.model.parsed().provider}</text>
+                  <Show when={showVariant()}>
+                    <text fg={theme.textMuted}>·</text>
+                    <text>
+                      <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
+                    </text>
+                  </Show>
                 </box>
               </Show>
             </box>
