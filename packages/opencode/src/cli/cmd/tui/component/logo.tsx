@@ -9,19 +9,22 @@ const LOGO_RIGHT = [`             ▄     `, `█▀▀▀ █▀▀█ █▀�
 export function Logo() {
   const { theme } = useTheme()
   return (
-    <box>
-      <For each={LOGO_LEFT}>
-        {(line, index) => (
-          <box flexDirection="row" gap={1}>
-            <text fg={theme.textMuted} selectable={false}>
-              {line}
-            </text>
-            <text fg={theme.text} attributes={TextAttributes.BOLD} selectable={false}>
-              {LOGO_RIGHT[index()]}
-            </text>
-          </box>
-        )}
-      </For>
+    <box flexDirection="column" alignItems="center">
+      <box>
+        <For each={LOGO_LEFT}>
+          {(line, index) => (
+            <box flexDirection="row" gap={1}>
+              <text fg={theme.textMuted} selectable={false}>
+                {line}
+              </text>
+              <text fg={theme.text} attributes={TextAttributes.BOLD} selectable={false}>
+                {LOGO_RIGHT[index()]}
+              </text>
+            </box>
+          )}
+        </For>
+      </box>
+      <text fg={theme.accent} selectable={false}>★</text>
     </box>
   )
 }
